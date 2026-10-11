@@ -98,6 +98,59 @@ async def test_validate_credentials_read_error(side_effect: Exception) -> None:
         await client.validate_credentials()
 
 
+# ── get_credits ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("100", 100), ("0", 0), ("42\n", 42)],
+    ids=["positive", "zero", "trailing_newline"],
+)
+async def test_get_credits_success(text: str, expected: int) -> None:
+    """Test that the credits balance is returned as an integer."""
+    session = _make_session(get_resp=_make_resp(200, text))
+    client = ThreemaGatewayClient(MOCK_GATEWAY_ID, MOCK_API_SECRET, session=session)
+    assert await client.get_credits() == expected
+    session.get.assert_awaited_once_with(
+        "https://msgapi.threema.ch/credits",
+        params={"from": MOCK_GATEWAY_ID, "secret": MOCK_API_SECRET},
+    )
+
+
+async def test_get_credits_auth_error() -> None:
+    """Test that 401 raises ThreemaAuthError."""
+    session = _make_session(get_resp=_make_resp(401))
+    client = ThreemaGatewayClient(MOCK_GATEWAY_ID, MOCK_API_SECRET, session=session)
+    with pytest.raises(ThreemaAuthError):
+        await client.get_credits()
+
+
+async def test_get_credits_server_error() -> None:
+    """Test that non-401 HTTP error raises ThreemaConnectionError."""
+    session = _make_session(get_resp=_make_resp(500))
+    client = ThreemaGatewayClient(MOCK_GATEWAY_ID, MOCK_API_SECRET, session=session)
+    with pytest.raises(ThreemaConnectionError):
+        await client.get_credits()
+
+
+async def test_get_credits_connection_error() -> None:
+    """Test that a connection error raises ThreemaConnectionError."""
+    session = MagicMock()
+    session.get = AsyncMock(side_effect=aiohttp.ClientError("connection reset"))
+    client = ThreemaGatewayClient(MOCK_GATEWAY_ID, MOCK_API_SECRET, session=session)
+    with pytest.raises(ThreemaConnectionError):
+        await client.get_credits()
+
+
+@pytest.mark.parametrize("text", ["", "abc", "1.5"], ids=["empty", "text", "float"])
+async def test_get_credits_malformed_response(text: str) -> None:
+    """Test that a non-integer response body raises ThreemaConnectionError."""
+    session = _make_session(get_resp=_make_resp(200, text))
+    client = ThreemaGatewayClient(MOCK_GATEWAY_ID, MOCK_API_SECRET, session=session)
+    with pytest.raises(ThreemaConnectionError):
+        await client.get_credits()
+
+
 # ── send_text_message: simple mode ───────────────────────────────────────
 
 

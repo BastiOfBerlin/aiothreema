@@ -71,8 +71,8 @@ class ThreemaGatewayClient:
             )
         return self._session
 
-    async def validate_credentials(self) -> None:
-        """Validate the Gateway credentials by checking remaining credits.
+    async def get_credits(self) -> int:
+        """Return the number of remaining credits for this Gateway ID.
 
         Raises ThreemaAuthError for invalid credentials.
         Raises ThreemaConnectionError for other failures.
@@ -85,22 +85,37 @@ class ThreemaGatewayClient:
             )
         except (aiohttp.ClientError, TimeoutError) as err:
             raise ThreemaConnectionError(
-                f"Connection error validating credentials: {err}"
+                f"Connection error fetching credits: {err}"
             ) from err
 
         if resp.status == _HTTP_UNAUTHORIZED:
             raise ThreemaAuthError("Invalid Threema Gateway credentials")
         if not resp.ok:
             raise ThreemaConnectionError(
-                f"Gateway error validating credentials: HTTP {resp.status}"
+                f"Gateway error fetching credits: HTTP {resp.status}"
             )
 
         try:
-            remaining_credits = await resp.text()
+            body = await resp.text()
         except (aiohttp.ClientError, TimeoutError) as err:
             raise ThreemaConnectionError(
-                f"Connection error reading validation response: {err}"
+                f"Connection error reading credits response: {err}"
             ) from err
+
+        try:
+            return int(body.strip())
+        except ValueError as err:
+            raise ThreemaConnectionError(
+                f"Unexpected credits response: {body!r}"
+            ) from err
+
+    async def validate_credentials(self) -> None:
+        """Validate the Gateway credentials by checking remaining credits.
+
+        Raises ThreemaAuthError for invalid credentials.
+        Raises ThreemaConnectionError for other failures.
+        """
+        remaining_credits = await self.get_credits()
         _LOGGER.debug("Gateway credentials validated, credits: %s", remaining_credits)
 
     async def _fetch_recipient_public_key(

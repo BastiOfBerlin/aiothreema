@@ -21,6 +21,7 @@ from aiothreema import ThreemaGatewayClient
 async def main() -> None:
     async with ThreemaGatewayClient("*GATEWAY", "api-secret") as client:
         await client.validate_credentials()
+        print(await client.get_credits())  # remaining Gateway credits
         message_id = await client.send_text_message("ABCD1234", "Hello!")
         print(message_id)
 
